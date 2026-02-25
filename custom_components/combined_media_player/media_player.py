@@ -17,7 +17,7 @@ from .const import CONF_NAME, CONF_SOURCES, DOMAIN
 # Priority tiers for active source selection (highest to lowest)
 _TIER1 = {MediaPlayerState.PLAYING, MediaPlayerState.BUFFERING}
 _TIER2 = {MediaPlayerState.PAUSED, MediaPlayerState.IDLE}
-_TIER3 = {MediaPlayerState.ON, MediaPlayerState.STANDBY}
+_TIER3 = {MediaPlayerState.ON}
 
 
 async def async_setup_entry(
@@ -116,7 +116,7 @@ class CombinedMediaPlayer(MediaPlayerEntity):
             return MediaPlayerState.PLAYING
         if src in {MediaPlayerState.PAUSED, MediaPlayerState.IDLE}:
             return MediaPlayerState.IDLE
-        if src in {MediaPlayerState.ON, MediaPlayerState.STANDBY}:
+        if src == MediaPlayerState.ON:
             return MediaPlayerState.ON
         return MediaPlayerState.OFF
 
