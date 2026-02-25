@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 (2026-02-25)
+- README rewritten in English as primary language
+- README: integration icon added
+- `strings.json` confirmed as English base; `translations/de.json` as German translation
+- Priority table updated to reflect removal of `standby`
+
 ## 1.0.0 (2026-02-25)
 - Initial release: Combined Media Player integration
 - Config flow: create combined player via UI with name + source selection
