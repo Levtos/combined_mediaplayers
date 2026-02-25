@@ -1,0 +1,15 @@
+{
+  "domain": "combined_media_player",
+  "name": "Combined Media Player",
+  "version": "1.0.0",
+  "documentation": "https://github.com/Levtos/combined_mediaplayers",
+  "issue_tracker": "https://github.com/Levtos/combined_mediaplayers/issues",
+  "codeowners": [
+    "@Levtos"
+  ],
+  "config_flow": true,
+  "iot_class": "local_push",
+  "integration_type": "helper",
+  "dependencies": [],
+  "requirements": []
+}
