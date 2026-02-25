@@ -28,6 +28,9 @@
           "sources": "Quellen (Reihenfolge = Priorität)"
         }
       }
+    },
+    "error": {
+      "name_required": "Name darf nicht leer sein."
     }
   }
 }
