@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Combined Media Player erstellen",
+        "description": "Gib dem kombinierten Player einen Namen und wähle die Quellen aus.\n\n**Priorität:** Die Reihenfolge der Auswahl bestimmt die Priorität – erste Auswahl = höchste Priorität. Du kannst die Reihenfolge jederzeit unter *Optionen* anpassen.",
+        "data": {
+          "name": "Name",
+          "sources": "Quellen (Reihenfolge = Priorität)"
+        }
+      }
+    },
+    "error": {
+      "name_required": "Name darf nicht leer sein.",
+      "sources_required": "Mindestens eine Quelle erforderlich."
+    },
+    "abort": {
+      "already_configured": "Diese Konfiguration existiert bereits."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Quellen anpassen",
+        "description": "Ändere die Quellen und ihre Reihenfolge. Die Reihenfolge der Auswahl bestimmt die Priorität (erste Auswahl = höchste Priorität).",
+        "data": {
+          "sources": "Quellen (Reihenfolge = Priorität)"
+        }
+      }
+    }
+  }
+}

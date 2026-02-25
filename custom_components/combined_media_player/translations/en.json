@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Create Combined Media Player",
+        "description": "Give the combined player a name and select its sources.\n\n**Priority:** The order of selection determines priority — first selected = highest priority. You can adjust the order anytime under *Options*.",
+        "data": {
+          "name": "Name",
+          "sources": "Sources (order = priority)"
+        }
+      }
+    },
+    "error": {
+      "name_required": "Name must not be empty.",
+      "sources_required": "At least one source is required."
+    },
+    "abort": {
+      "already_configured": "This configuration already exists."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit Sources",
+        "description": "Change the sources and their order. The order of selection determines priority (first selected = highest priority).",
+        "data": {
+          "sources": "Sources (order = priority)"
+        }
+      }
+    }
+  }
+}
