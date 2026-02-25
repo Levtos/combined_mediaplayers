@@ -66,23 +66,51 @@ class CombinedMediaPlayerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class CombinedMediaPlayerOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         if user_input is not None:
+            new_name = user_input.get(CONF_NAME, "").strip()
+            if not new_name:
+                return self.async_show_form(
+                    step_id="init",
+                    data_schema=self._build_schema(user_input),
+                    errors={CONF_NAME: "name_required"},
+                )
+            if new_name != self.config_entry.title:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, title=new_name
+                )
             return self.async_create_entry(title="", data=user_input)
-
-        current_sources = self.config_entry.options.get(
-            CONF_SOURCES,
-            self.config_entry.data.get(CONF_SOURCES, []),
-        )
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_SOURCES, default=list(current_sources)): selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain="media_player",
-                            multiple=True,
-                        )
-                    ),
-                }
-            ),
+            data_schema=self._build_schema(),
+        )
+
+    def _build_schema(self, prefill: dict | None = None) -> vol.Schema:
+        current_name = (
+            prefill.get(CONF_NAME)
+            if prefill
+            else (
+                self.config_entry.options.get(CONF_NAME)
+                or self.config_entry.data.get(CONF_NAME, "")
+            )
+        )
+        current_sources = (
+            prefill.get(CONF_SOURCES)
+            if prefill
+            else list(
+                self.config_entry.options.get(CONF_SOURCES)
+                or self.config_entry.data.get(CONF_SOURCES, [])
+            )
+        )
+        return vol.Schema(
+            {
+                vol.Required(CONF_NAME, default=current_name): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                ),
+                vol.Required(CONF_SOURCES, default=current_sources): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="media_player",
+                        multiple=True,
+                    )
+                ),
+            }
         )
