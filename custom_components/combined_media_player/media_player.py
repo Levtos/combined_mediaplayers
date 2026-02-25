@@ -45,9 +45,12 @@ class CombinedMediaPlayer(MediaPlayerEntity):
         except TypeError:
             pass
         self._entry = entry
-        self._attr_unique_id = entry.entry_id
+        self._attr_unique_id = entry.unique_id
         self._sources: list[str] = self._sources_from_entry(entry)
-        self._attr_name: str = entry.data.get(CONF_NAME, "Combined Media Player")
+        self._attr_name: str = (
+            entry.options.get(CONF_NAME)
+            or entry.data.get(CONF_NAME, "Combined Media Player")
+        )
         self._unsub: Any = None
 
     @property

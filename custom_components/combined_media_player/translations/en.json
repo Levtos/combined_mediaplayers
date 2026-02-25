@@ -21,9 +21,10 @@
   "options": {
     "step": {
       "init": {
-        "title": "Edit Sources",
-        "description": "Change the sources and their order. The order of selection determines priority (first selected = highest priority).",
+        "title": "Edit Combined Media Player",
+        "description": "Rename the player and change its sources. Source order determines priority (first = highest).",
         "data": {
+          "name": "Name",
           "sources": "Sources (order = priority)"
         }
       }

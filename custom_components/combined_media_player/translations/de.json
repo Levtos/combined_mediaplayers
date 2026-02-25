@@ -21,9 +21,10 @@
   "options": {
     "step": {
       "init": {
-        "title": "Quellen anpassen",
-        "description": "Ändere die Quellen und ihre Reihenfolge. Die Reihenfolge der Auswahl bestimmt die Priorität (erste Auswahl = höchste Priorität).",
+        "title": "Combined Media Player bearbeiten",
+        "description": "Benenne den Player um und passe die Quellen an. Die Reihenfolge bestimmt die Priorität (erste Quelle = höchste Priorität).",
         "data": {
+          "name": "Name",
           "sources": "Quellen (Reihenfolge = Priorität)"
         }
       }
