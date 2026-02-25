@@ -10,6 +10,7 @@ from homeassistant.components.media_player import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_PICTURE
 from homeassistant.core import HomeAssistant, State, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import CONF_NAME, CONF_SOURCES, DOMAIN
@@ -48,6 +49,15 @@ class CombinedMediaPlayer(MediaPlayerEntity):
         self._sources: list[str] = self._sources_from_entry(entry)
         self._attr_name: str = entry.data.get(CONF_NAME, "Combined Media Player")
         self._unsub: Any = None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name=self._attr_name,
+            manufacturer="Combined Media Player",
+            model="Virtual Media Player",
+        )
 
     @staticmethod
     def _sources_from_entry(entry: ConfigEntry) -> list[str]:
