@@ -1,63 +1,65 @@
 # Combined Media Player
 
-Eine Home Assistant Custom Integration, die mehrere Media Player zu einem kombinierten Player zusammenführt – mit konfigurierbarer Prioritätslogik.
+![Combined Media Player](custom_components/combined_media_player/icon.png)
+
+A Home Assistant custom integration that merges multiple media players into a single combined player with configurable priority logic.
 
 ## Features
 
-- **Mehrere Quellen** – beliebig viele `media_player`-Entitäten als Eingangsquellen
-- **Prioritätsreihenfolge** – Position 1 = höchste Priorität, Position N = niedrigste
-- **Intelligente Aktiverkennung** – spielende Quellen schlagen pausierte, pausierte schlagen eingeschaltete
-- **Transparente Cover Art** – übernimmt das Bild der aktiven Quelle (funktioniert mit nativem Cover sowie mit [Media Cover Art](https://github.com/Levtos/test_art))
-- **Vollständige Steuerung** – alle Befehle (Play, Pause, Volume, Next, ...) werden an die aktive Quelle weitergeleitet
-- **Sauberes State-Modell** – nur `playing`, `idle`, `on`, `off` – kein `unavailable` oder `unknown`
+- **Multiple sources** – any number of `media_player` entities as input sources
+- **Priority order** – position 1 = highest priority, position N = lowest
+- **Smart activity detection** – playing sources beat paused, paused beat on
+- **Transparent cover art** – forwards the active source's image (works with native cover as well as [Media Cover Art](https://github.com/Levtos/test_art))
+- **Full control** – all commands (Play, Pause, Volume, Next, …) are forwarded to the active source
+- **Clean state model** – only `playing`, `idle`, `on`, `off` – no `unavailable` or `unknown`
 
-## Prioritätslogik
+## Priority Logic
 
-| Tier | States | Beschreibung |
-|------|--------|--------------|
-| 1 | `playing`, `buffering` | Aktiv spielend |
-| 2 | `paused`, `idle` | Pausiert / bereit |
-| 3 | `on`, `standby` | Eingeschaltet, aber inaktiv |
-| — | `off`, `unavailable`, `unknown` | Wird ignoriert |
+| Tier | States | Description |
+|------|--------|-------------|
+| 1 | `playing`, `buffering` | Actively playing |
+| 2 | `paused`, `idle` | Paused / ready |
+| 3 | `on` | Powered on but inactive |
+| — | `off`, `unavailable`, `unknown` | Ignored |
 
-Innerhalb desselben Tiers gewinnt die Quelle mit der niedrigeren Position (höhere Priorität).
+Within the same tier, the source with the lower position (higher priority) wins.
 
-**State-Mapping des kombinierten Players:**
+**State mapping of the combined player:**
 
-| Aktive Quelle | Kombinierter Player |
-|---------------|---------------------|
+| Active source | Combined player |
+|---------------|-----------------|
 | `playing` / `buffering` | `playing` |
 | `paused` / `idle` | `idle` |
-| `on` / `standby` | `on` |
-| Keine aktive Quelle | `off` |
+| `on` | `on` |
+| No active source | `off` |
 
 ## Installation
 
-### HACS (empfohlen)
+### HACS (recommended)
 
-1. HACS öffnen → Integrationen → ⋮ → Benutzerdefinierte Repositories
-2. URL: `https://github.com/Levtos/combined_mediaplayers`, Kategorie: Integration
-3. „Combined Media Player" installieren und HA neu starten
+1. Open HACS → Integrations → ⋮ → Custom Repositories
+2. URL: `https://github.com/Levtos/combined_mediaplayers`, Category: Integration
+3. Install "Combined Media Player" and restart HA
 
-### Manuell
+### Manual
 
-Ordner `custom_components/combined_media_player` in dein `config/custom_components/`-Verzeichnis kopieren und HA neu starten.
+Copy the `custom_components/combined_media_player` folder into your `config/custom_components/` directory and restart HA.
 
-## Konfiguration
+## Configuration
 
-1. **Einstellungen → Geräte & Dienste → Integration hinzufügen → Combined Media Player**
-2. Name vergeben (z. B. „Wohnzimmer")
-3. Quell-Player auswählen – **die Reihenfolge der Auswahl bestimmt die Priorität**
-4. Fertig – die Entität `media_player.<name>` erscheint sofort
+1. **Settings → Devices & Services → Add Integration → Combined Media Player**
+2. Enter a name (e.g. "Living Room")
+3. Select source players – **the selection order determines the priority**
+4. Done – the entity `media_player.<name>` appears immediately
 
-Die Quellen und ihre Reihenfolge können jederzeit unter **Optionen** der Integration geändert werden.
+Sources and their order can be changed at any time under **Options** of the integration.
 
-## Beispiel: PS5 · AppleTV · HomePods
+## Example: PS5 · Apple TV · HomePods
 
 ```
-Prio 1: media_player.ps5             → Gaming   → eigene Thumbnails
-Prio 2: media_player.appletv         → Streaming → eigene Cover
-Prio 3: media_player.homepods_cover  → Musik     → iTunes-Cover via media_cover_art
+Prio 1: media_player.ps5             → Gaming    → native thumbnails
+Prio 2: media_player.appletv         → Streaming → native cover art
+Prio 3: media_player.homepods_cover  → Music     → iTunes cover via media_cover_art
 ```
 
-Der kombinierte Player zeigt automatisch das Bild der gerade aktiven Quelle.
+The combined player automatically shows the image of the currently active source.
