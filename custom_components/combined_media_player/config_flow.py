@@ -5,6 +5,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import CONF_NAME, CONF_SOURCES, DOMAIN
@@ -57,13 +58,14 @@ class CombinedMediaPlayerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
+    @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> "CombinedMediaPlayerOptionsFlow":
-        return CombinedMediaPlayerOptionsFlow(config_entry)
+        return CombinedMediaPlayerOptionsFlow()
 
 
-class CombinedMediaPlayerOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
+class CombinedMediaPlayerOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         if user_input is not None:
             new_name = user_input.get(CONF_NAME, "").strip()

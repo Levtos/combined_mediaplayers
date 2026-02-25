@@ -28,6 +28,9 @@
           "sources": "Sources (order = priority)"
         }
       }
+    },
+    "error": {
+      "name_required": "Name must not be empty."
     }
   }
 }
