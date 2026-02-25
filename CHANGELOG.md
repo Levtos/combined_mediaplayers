@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 (2026-02-25)
+- `integration_type` changed from `helper` to `integration` – integration now appears under Devices & Services, not Helpers
+- Added `device_info` to the entity – the combined player is now registered as a proper HA device with manufacturer/model
+- `entity_picture` property already forwarded cover art from the active source (no change needed)
+
 ## 1.1.0 (2026-02-25)
 - README rewritten in English as primary language
 - README: integration icon added
