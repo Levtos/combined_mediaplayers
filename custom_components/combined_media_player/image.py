@@ -6,10 +6,13 @@ from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_PICTURE
 from homeassistant.core import HomeAssistant, State, callback
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.network import get_url as ha_get_url
 from homeassistant.util import dt as dt_util, slugify
 
-from .const import CONF_SOURCES
+from .const import CONF_SOURCES, DOMAIN
 from .media_player import _TIER1, _TIER2, _TIER3, _safe_state
 
 
@@ -33,6 +36,9 @@ class CombinedCoverImage(ImageEntity):
         self._attr_name = f"{entry.title} Cover"
         self._attr_suggested_object_id = (
             f"{slugify(entry.unique_id or entry.entry_id)}_cover"
+        )
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
         )
         self._unsub: Any = None
 
@@ -61,12 +67,36 @@ class CombinedCoverImage(ImageEntity):
         return active.attributes.get(ATTR_ENTITY_PICTURE)
 
     def _refresh_image_url(self) -> None:
-        """Update _attr_image_url and bump image_last_updated when the URL changed."""
+        """Bump image_last_updated when the active cover URL changes."""
         new_url = self._get_cover_url()
-        # _attr_image_url starts as UNDEFINED (class default); treat any change as new
-        if new_url != getattr(self, "_attr_image_url", None):
-            self._attr_image_url = new_url
+        if new_url != getattr(self, "_cached_cover_url", None):
+            self._cached_cover_url: str | None = new_url
             self._attr_image_last_updated = dt_util.utcnow()
+
+    async def async_image(self) -> bytes | None:
+        """Fetch cover image bytes via HA's HTTP session.
+
+        entity_picture is often a HA-relative path (/api/media_player_proxy/…).
+        The ImageEntity base-class uses httpx without a base-URL and therefore
+        cannot resolve relative paths – so we fetch through aiohttp instead.
+        """
+        url = self._get_cover_url()
+        if url is None:
+            return None
+        if url.startswith("/"):
+            try:
+                url = f"{ha_get_url(self.hass)}{url}"
+            except Exception:
+                return None
+        session = async_get_clientsession(self.hass)
+        try:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    self._attr_content_type = resp.content_type or "image/jpeg"
+                    return await resp.read()
+        except Exception:
+            pass
+        return None
 
     # ------------------------------------------------------------------
     # Life cycle
