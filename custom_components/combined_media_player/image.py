@@ -6,10 +6,11 @@ from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_PICTURE
 from homeassistant.core import HomeAssistant, State, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util, slugify
 
-from .const import CONF_SOURCES
+from .const import CONF_SOURCES, DOMAIN
 from .media_player import _TIER1, _TIER2, _TIER3, _safe_state
 
 
@@ -33,6 +34,9 @@ class CombinedCoverImage(ImageEntity):
         self._attr_name = f"{entry.title} Cover"
         self._attr_suggested_object_id = (
             f"{slugify(entry.unique_id or entry.entry_id)}_cover"
+        )
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
         )
         self._unsub: Any = None
 
