@@ -101,10 +101,17 @@ class CombinedCoverImage(ImageEntity):
         Returns None on any error so the caller can try the next candidate.
         """
         if url.startswith("/"):
-            try:
-                url = f"{ha_get_url(self.hass)}{url}"
-            except Exception:
-                return None
+            base = None
+            for kw in (
+                {"allow_ip": True, "prefer_external": False},
+                {"allow_ip": True, "prefer_external": True},
+            ):
+                try:
+                    base = ha_get_url(self.hass, **kw)
+                    break
+                except Exception:
+                    pass
+            url = f"{base or 'http://127.0.0.1:8123'}{url}"
         try:
             async with session.get(url, timeout=_FETCH_TIMEOUT) as resp:
                 if resp.status == 200:
@@ -179,9 +186,6 @@ class CombinedCoverImage(ImageEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         active = self._active_state()
         return {
-            ATTR_ENTITY_PICTURE: active.attributes.get(ATTR_ENTITY_PICTURE)
-            if active
-            else None,
             "active_source": active.entity_id if active else None,
             "active_source_name": (
                 active.attributes.get("friendly_name") or active.entity_id
