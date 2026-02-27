@@ -1,6 +1,6 @@
 # Combined Media Player
 
-![Combined Media Player](custom_components/combined_media_player/icon.png)
+![Combined Media Player](custom_components/combined_media_player/icons/logo.png)
 
 A Home Assistant custom integration that merges multiple media players into a single combined player with configurable priority logic.
 
