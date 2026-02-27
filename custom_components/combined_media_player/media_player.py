@@ -224,17 +224,20 @@ class CombinedMediaPlayer(MediaPlayerEntity):
     # ── Cover art ─────────────────────────────────────────────────────────────
 
     @property
-    def entity_picture(self) -> str | None:
-        """Forward the active source's entity_picture.
-
-        This transparently handles any image source:
-        - Native cover art from PS5, AppleTV, etc.
-        - media_cover_art-wrapped images (image/camera entities)
-        """
+    def media_image_url(self) -> str | None:
+        """Return cover art URL, preferring direct CDN URLs over HA proxy."""
         active = self._active_state()
         if active is None:
             return None
-        return active.attributes.get(ATTR_ENTITY_PICTURE)
+        return (
+            active.attributes.get("media_image_url")
+            or active.attributes.get(ATTR_ENTITY_PICTURE)
+        )
+
+    @property
+    def media_image_remotely_accessible(self) -> bool:
+        """Return True when media_image_url is a direct (non-proxied) URL."""
+        return bool(self._from_active("media_image_remotely_accessible", False))
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
