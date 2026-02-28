@@ -88,9 +88,14 @@ class CombinedCoverImage(ImageEntity):
         return None
 
     def _refresh_image_url(self) -> None:
-        """Bump image_last_updated when the image fingerprint changes."""
+        """Bump image_last_updated only when a *new* image is available.
+
+        Deliberately ignores transitions to a None fingerprint (buffering,
+        brief pause, episode change) so the last known cover stays visible
+        until the next real image URL appears.
+        """
         fp = self._image_fingerprint()
-        if fp != getattr(self, "_cached_fingerprint", None):
+        if fp is not None and fp != getattr(self, "_cached_fingerprint", None):
             self._cached_fingerprint: str | None = fp
             self._attr_image_last_updated = dt_util.utcnow()
 
@@ -179,6 +184,7 @@ class CombinedCoverImage(ImageEntity):
                 image = await self._get_entity_image(sid)
                 if image is not None:
                     _LOGGER.debug("%s: image retrieved via async_get_media_image()", sid)
+                    self._last_image: bytes | None = image
                     return image
 
                 # Fallback: fetch entity_picture URL directly.
@@ -189,13 +195,22 @@ class CombinedCoverImage(ImageEntity):
                     image = await self._fetch_url(session, url)
                     if image is not None:
                         _LOGGER.debug("%s: image retrieved via entity_picture URL", sid)
+                        self._last_image = image
                         return image
 
                 _LOGGER.debug(
                     "%s: no image available, trying next source in priority chain", sid
                 )
-        _LOGGER.debug("No active source could provide a cover image")
-        return None
+
+        # No current image available – return last known good image so the
+        # cover stays visible during brief gaps (buffering, episode changes,
+        # short pauses) until a new image URL is detected.
+        cached = getattr(self, "_last_image", None)
+        if cached is not None:
+            _LOGGER.debug("Returning last known good image during transition")
+        else:
+            _LOGGER.debug("No active source could provide a cover image")
+        return cached
 
     # ------------------------------------------------------------------
     # Life cycle
@@ -204,6 +219,10 @@ class CombinedCoverImage(ImageEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self._sources = self._sources_from_entry(self._entry)
+        # Ensure entity is never in "unknown" state – image_last_updated must
+        # always be set so the image proxy returns a valid response even before
+        # the first real image is available.
+        self._attr_image_last_updated = dt_util.utcnow()
         self._refresh_image_url()
         if self._sources:
             self._unsub = async_track_state_change_event(
