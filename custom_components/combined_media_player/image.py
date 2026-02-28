@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import logging
+
 import aiohttp
 from typing import Any
+
+_LOGGER = logging.getLogger(__name__)
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
@@ -16,11 +20,9 @@ from homeassistant.util import dt as dt_util, slugify
 from .const import CONF_SOURCES, DOMAIN
 from .media_player import _TIER1, _TIER2, _TIER3, _safe_state
 
-# Attributes to check per source, in preference order:
-# 1. media_image_url – direct CDN/https URL (Spotify, Apple Music, …); only
-#    present in state attributes when media_image_remotely_accessible is True.
-# 2. entity_picture  – HA-proxied URL (/api/media_player_proxy/…).
-_IMAGE_ATTRS = ("media_image_url", ATTR_ENTITY_PICTURE)
+# Used only for fingerprinting (cache-busting); entity_picture changes whenever
+# the cache key changes, which happens when media_image_url changes.
+_FINGERPRINT_ATTR = ATTR_ENTITY_PICTURE
 
 _FETCH_TIMEOUT = aiohttp.ClientTimeout(total=5)
 
@@ -72,34 +74,67 @@ class CombinedCoverImage(ImageEntity):
     def _image_fingerprint(self) -> str | None:
         """Return a string that changes whenever the displayed image should change.
 
-        Considers the primary active source and its image URL so that
-        image_last_updated is bumped correctly for cache-busting.
+        Uses entity_picture which contains a cache key derived from media_image_url,
+        so it changes automatically whenever the cover art changes.
         """
         for tier in (_TIER1, _TIER2, _TIER3):
             for sid in self._sources:
                 state = self.hass.states.get(sid)
                 if not (state and _safe_state(state.state) and state.state in tier):
                     continue
-                for attr in _IMAGE_ATTRS:
-                    url = state.attributes.get(attr)
-                    if url:
-                        return f"{sid}:{url}"
+                url = state.attributes.get(_FINGERPRINT_ATTR)
+                if url:
+                    return f"{sid}:{url}"
         return None
 
     def _refresh_image_url(self) -> None:
-        """Bump image_last_updated when the image fingerprint changes."""
+        """Bump image_last_updated only when a *new* image is available.
+
+        Deliberately ignores transitions to a None fingerprint (buffering,
+        brief pause, episode change) so the last known cover stays visible
+        until the next real image URL appears.
+        """
         fp = self._image_fingerprint()
-        if fp != getattr(self, "_cached_fingerprint", None):
+        if fp is not None and fp != getattr(self, "_cached_fingerprint", None):
             self._cached_fingerprint: str | None = fp
             self._attr_image_last_updated = dt_util.utcnow()
 
-    async def _fetch_image(
+    async def _get_entity_image(self, entity_id: str) -> bytes | None:
+        """Get image bytes by calling async_get_media_image() on the entity object.
+
+        This is the same path HA's media_player proxy uses internally, so it
+        handles Music Assistant auth, custom URL schemes, pyatv, etc. correctly
+        without needing to know what type of integration the source uses.
+        Returns None if the entity object is not accessible or has no image.
+        """
+        mp_component = self.hass.data.get("media_player")
+        if mp_component is None or not hasattr(mp_component, "get_entity"):
+            _LOGGER.debug(
+                "%s: media_player EntityComponent not available, falling back to URL fetch",
+                entity_id,
+            )
+            return None
+        entity = mp_component.get_entity(entity_id)
+        if entity is None:
+            _LOGGER.debug("%s: entity object not found in component", entity_id)
+            return None
+        if not hasattr(entity, "async_get_media_image"):
+            _LOGGER.debug("%s: entity has no async_get_media_image()", entity_id)
+            return None
+        try:
+            image_data, content_type = await entity.async_get_media_image()
+            if image_data:
+                self._attr_content_type = content_type or "image/jpeg"
+                return image_data
+            _LOGGER.debug("%s: async_get_media_image() returned no data", entity_id)
+        except Exception as exc:
+            _LOGGER.debug("%s: async_get_media_image() failed: %s", entity_id, exc)
+        return None
+
+    async def _fetch_url(
         self, session: aiohttp.ClientSession, url: str
     ) -> bytes | None:
-        """Fetch image bytes from *url*, resolving HA-relative paths.
-
-        Returns None on any error so the caller can try the next candidate.
-        """
+        """Fallback: fetch image bytes from a URL, resolving HA-relative paths."""
         if url.startswith("/"):
             base = None
             for kw in (
@@ -126,14 +161,14 @@ class CombinedCoverImage(ImageEntity):
 
         Strategy (most-reliable first):
         1. For each active source (highest tier / priority first):
-           a. Try ``media_image_url`` – direct CDN URL present when the image
-              is remotely accessible (HomePod + Spotify/Apple Music, etc.).
-           b. Try ``entity_picture`` – HA-proxied URL that fetches artwork
-              through the integration (Apple TV via pyatv, PS5, …).
+           a. Call async_get_media_image() on the entity object directly –
+              same internal path as HA's media_player proxy, handles Music
+              Assistant auth, pyatv, etc. transparently.
+           b. Fallback: fetch entity_picture URL directly (CDN URL or HA proxy
+              URL with embedded token).
         2. If the primary source fails (e.g. pyatv returns "Artwork not
-           present"), fall through to the next active source.  This means a
-           playing HomePod can supply the artwork even when an Apple TV is
-           technically the highest-priority source but has no artwork.
+           present"), fall through to the next active source so a playing
+           HomePod can supply artwork when Apple TV has none.
         """
         session = async_get_clientsession(self.hass)
         for tier in (_TIER1, _TIER2, _TIER3):
@@ -141,14 +176,41 @@ class CombinedCoverImage(ImageEntity):
                 state = self.hass.states.get(sid)
                 if not (state and _safe_state(state.state) and state.state in tier):
                     continue
-                for attr in _IMAGE_ATTRS:
-                    url = state.attributes.get(attr)
-                    if not url:
-                        continue
-                    image = await self._fetch_image(session, url)
+
+                # Primary: delegate to the source entity's own implementation.
+                # Each integration (Music Assistant, Apple TV, PS5, …) implements
+                # async_get_media_image() for its specific protocol/auth needs.
+                # This is the same internal path HA's media_player proxy uses.
+                image = await self._get_entity_image(sid)
+                if image is not None:
+                    _LOGGER.debug("%s: image retrieved via async_get_media_image()", sid)
+                    self._last_image: bytes | None = image
+                    return image
+
+                # Fallback: fetch entity_picture URL directly.
+                # Covers CDN URLs (remotely accessible) and HA proxy URLs
+                # (embedded token acts as auth).
+                url = state.attributes.get(ATTR_ENTITY_PICTURE)
+                if url:
+                    image = await self._fetch_url(session, url)
                     if image is not None:
+                        _LOGGER.debug("%s: image retrieved via entity_picture URL", sid)
+                        self._last_image = image
                         return image
-        return None
+
+                _LOGGER.debug(
+                    "%s: no image available, trying next source in priority chain", sid
+                )
+
+        # No current image available – return last known good image so the
+        # cover stays visible during brief gaps (buffering, episode changes,
+        # short pauses) until a new image URL is detected.
+        cached = getattr(self, "_last_image", None)
+        if cached is not None:
+            _LOGGER.debug("Returning last known good image during transition")
+        else:
+            _LOGGER.debug("No active source could provide a cover image")
+        return cached
 
     # ------------------------------------------------------------------
     # Life cycle
@@ -157,6 +219,10 @@ class CombinedCoverImage(ImageEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self._sources = self._sources_from_entry(self._entry)
+        # Ensure entity is never in "unknown" state – image_last_updated must
+        # always be set so the image proxy returns a valid response even before
+        # the first real image is available.
+        self._attr_image_last_updated = dt_util.utcnow()
         self._refresh_image_url()
         if self._sources:
             self._unsub = async_track_state_change_event(
