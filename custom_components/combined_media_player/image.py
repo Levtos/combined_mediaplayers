@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import logging
+
 import aiohttp
 from typing import Any
+
+_LOGGER = logging.getLogger(__name__)
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
@@ -94,22 +98,32 @@ class CombinedCoverImage(ImageEntity):
         """Get image bytes by calling async_get_media_image() on the entity object.
 
         This is the same path HA's media_player proxy uses internally, so it
-        handles Music Assistant auth, custom URL schemes, etc. correctly.
+        handles Music Assistant auth, custom URL schemes, pyatv, etc. correctly
+        without needing to know what type of integration the source uses.
         Returns None if the entity object is not accessible or has no image.
         """
         mp_component = self.hass.data.get("media_player")
         if mp_component is None or not hasattr(mp_component, "get_entity"):
+            _LOGGER.debug(
+                "%s: media_player EntityComponent not available, falling back to URL fetch",
+                entity_id,
+            )
             return None
         entity = mp_component.get_entity(entity_id)
-        if entity is None or not hasattr(entity, "async_get_media_image"):
+        if entity is None:
+            _LOGGER.debug("%s: entity object not found in component", entity_id)
+            return None
+        if not hasattr(entity, "async_get_media_image"):
+            _LOGGER.debug("%s: entity has no async_get_media_image()", entity_id)
             return None
         try:
             image_data, content_type = await entity.async_get_media_image()
             if image_data:
                 self._attr_content_type = content_type or "image/jpeg"
                 return image_data
-        except Exception:
-            pass
+            _LOGGER.debug("%s: async_get_media_image() returned no data", entity_id)
+        except Exception as exc:
+            _LOGGER.debug("%s: async_get_media_image() failed: %s", entity_id, exc)
         return None
 
     async def _fetch_url(
@@ -158,17 +172,29 @@ class CombinedCoverImage(ImageEntity):
                 if not (state and _safe_state(state.state) and state.state in tier):
                     continue
 
-                # Primary: use entity's own async_get_media_image()
+                # Primary: delegate to the source entity's own implementation.
+                # Each integration (Music Assistant, Apple TV, PS5, …) implements
+                # async_get_media_image() for its specific protocol/auth needs.
+                # This is the same internal path HA's media_player proxy uses.
                 image = await self._get_entity_image(sid)
                 if image is not None:
+                    _LOGGER.debug("%s: image retrieved via async_get_media_image()", sid)
                     return image
 
-                # Fallback: fetch entity_picture URL directly
+                # Fallback: fetch entity_picture URL directly.
+                # Covers CDN URLs (remotely accessible) and HA proxy URLs
+                # (embedded token acts as auth).
                 url = state.attributes.get(ATTR_ENTITY_PICTURE)
                 if url:
                     image = await self._fetch_url(session, url)
                     if image is not None:
+                        _LOGGER.debug("%s: image retrieved via entity_picture URL", sid)
                         return image
+
+                _LOGGER.debug(
+                    "%s: no image available, trying next source in priority chain", sid
+                )
+        _LOGGER.debug("No active source could provide a cover image")
         return None
 
     # ------------------------------------------------------------------
