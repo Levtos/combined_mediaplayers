@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Combined Media Player erstellen",
-        "description": "Gib dem kombinierten Player einen Namen und wähle die Quellen aus.\n\n**Priorität:** Die Reihenfolge der Auswahl bestimmt die Priorität – erste Auswahl = höchste Priorität. Du kannst die Reihenfolge jederzeit unter *Optionen* anpassen.",
+        "description": "Gib dem kombinierten Player einen Namen und wähle die Quellen aus.\n\n**Priorität:** Die Reihenfolge der Auswahl bestimmt die Priorität – erste Auswahl = höchste Priorität. Du kannst die Reihenfolge jederzeit über *Konfigurieren* anpassen – per Drag & Drop direkt in diesem Dialog.",
         "data": {
           "name": "Name",
           "sources": "Quellen (Reihenfolge = Priorität)"
@@ -22,7 +22,7 @@
     "step": {
       "init": {
         "title": "Combined Media Player bearbeiten",
-        "description": "Benenne den Player um und passe die Quellen an. Die Reihenfolge bestimmt die Priorität (erste Quelle = höchste Priorität).",
+        "description": "Benenne den Player um und passe die Quellen an. Die Reihenfolge bestimmt die Priorität (erste Quelle = höchste Priorität). Ziehe die Einträge per Drag & Drop, um die Reihenfolge zu ändern.",
         "data": {
           "name": "Name",
           "sources": "Quellen (Reihenfolge = Priorität)"
