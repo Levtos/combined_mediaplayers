@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Create Combined Media Player",
-        "description": "Give the combined player a name and select its sources.\n\n**Priority:** The order of selection determines priority — first selected = highest priority. You can adjust the order anytime via *Configure* — drag & drop directly in this dialog.",
+        "description": "Give the combined player a name and select its sources.\n\n**Priority:** The order of selection determines priority — first selected = highest priority. You can adjust the order anytime via *Configure*.",
         "data": {
           "name": "Name",
           "sources": "Sources (order = priority)"
@@ -22,15 +22,23 @@
     "step": {
       "init": {
         "title": "Edit Combined Media Player",
-        "description": "Rename the player and adjust its sources. Source order determines priority (first = highest). Drag & drop entries to reorder them.",
+        "description": "Rename the player and set the source priority. Slot 1 = highest priority. Leave unused slots on \"—\".",
         "data": {
           "name": "Name",
-          "sources": "Sources (order = priority)"
+          "slot_1": "Priority 1 (highest)",
+          "slot_2": "Priority 2",
+          "slot_3": "Priority 3",
+          "slot_4": "Priority 4",
+          "slot_5": "Priority 5",
+          "slot_6": "Priority 6",
+          "slot_7": "Priority 7",
+          "slot_8": "Priority 8"
         }
       }
     },
     "error": {
-      "name_required": "Name must not be empty."
+      "name_required": "Name must not be empty.",
+      "sources_required": "At least one source must be set."
     }
   }
 }
