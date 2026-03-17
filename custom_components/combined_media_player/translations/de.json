@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Combined Media Player erstellen",
-        "description": "Gib dem kombinierten Player einen Namen und wähle die Quellen aus.\n\n**Priorität:** Die Reihenfolge der Auswahl bestimmt die Priorität – erste Auswahl = höchste Priorität. Du kannst die Reihenfolge jederzeit über *Konfigurieren* anpassen – per Drag & Drop direkt in diesem Dialog.",
+        "description": "Gib dem kombinierten Player einen Namen und wähle die Quellen aus.\n\n**Priorität:** Die Reihenfolge der Auswahl bestimmt die Priorität – erste Auswahl = höchste Priorität. Du kannst die Reihenfolge jederzeit über *Konfigurieren* anpassen.",
         "data": {
           "name": "Name",
           "sources": "Quellen (Reihenfolge = Priorität)"
@@ -22,15 +22,23 @@
     "step": {
       "init": {
         "title": "Combined Media Player bearbeiten",
-        "description": "Benenne den Player um und passe die Quellen an. Die Reihenfolge bestimmt die Priorität (erste Quelle = höchste Priorität). Ziehe die Einträge per Drag & Drop, um die Reihenfolge zu ändern.",
+        "description": "Benenne den Player um und lege die Quellen-Priorität fest. Slot 1 = höchste Priorität. Unbenutzte Slots auf \"—\" lassen.",
         "data": {
           "name": "Name",
-          "sources": "Quellen (Reihenfolge = Priorität)"
+          "slot_1": "Priorität 1 (höchste)",
+          "slot_2": "Priorität 2",
+          "slot_3": "Priorität 3",
+          "slot_4": "Priorität 4",
+          "slot_5": "Priorität 5",
+          "slot_6": "Priorität 6",
+          "slot_7": "Priorität 7",
+          "slot_8": "Priorität 8"
         }
       }
     },
     "error": {
-      "name_required": "Name darf nicht leer sein."
+      "name_required": "Name darf nicht leer sein.",
+      "sources_required": "Mindestens eine Quelle muss belegt sein."
     }
   }
 }
