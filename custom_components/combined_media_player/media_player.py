@@ -8,7 +8,6 @@ from homeassistant.components.media_player import (
     MediaPlayerState,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_PICTURE
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event
@@ -271,19 +270,48 @@ class CombinedMediaPlayer(MediaPlayerEntity):
 
     @property
     def media_image_url(self) -> str | None:
-        """Return cover art URL, preferring direct CDN URLs over HA proxy."""
+        """Return cover art URL.
+
+        Only returns directly accessible URLs (http/https). HA-internal proxy
+        paths from entity_picture are intentionally excluded: they contain
+        session tokens and cannot be followed by external consumers like Music
+        Assistant. When only a proxied URL is available, we return None so that
+        HA creates its own proxy for this entity via async_get_media_image().
+        """
         active = self._active_state()
         if active is None:
             return None
-        return (
-            active.attributes.get("media_image_url")
-            or active.attributes.get(ATTR_ENTITY_PICTURE)
-        )
+        url = active.attributes.get("media_image_url")
+        if url and url.startswith("http"):
+            return url
+        # entity_picture is a session-scoped HA-internal path – not usable externally.
+        # Fall back to None; async_get_media_image() will fetch via the image entity.
+        return None
+
+    async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
+        """Delegate image fetching to the active source entity's own handler."""
+        active_id = self._active_entity_id()
+        if not active_id:
+            return None, None
+        component = self.hass.data.get("entity_components", {}).get("media_player")
+        if not component:
+            return None, None
+        entity = component.get_entity(active_id)
+        if entity is None:
+            return None, None
+        try:
+            return await entity.async_get_media_image()
+        except Exception:
+            return None, None
 
     @property
     def media_image_remotely_accessible(self) -> bool:
-        """Return True when media_image_url is a direct (non-proxied) URL."""
-        return bool(self._from_active("media_image_remotely_accessible", False))
+        """Return True only when the source exposes a direct CDN URL."""
+        active = self._active_state()
+        if active is None:
+            return False
+        url = active.attributes.get("media_image_url", "")
+        return bool(url and url.startswith("http") and self._from_active("media_image_remotely_accessible", False))
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
