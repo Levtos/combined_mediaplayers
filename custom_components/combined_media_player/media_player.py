@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .const import CONF_NAME, CONF_SOURCES, DOMAIN
+from .const import CONF_AUDIO_SOURCES, CONF_NAME, CONF_SOURCES, DOMAIN
 
 # Priority tiers for active source selection (highest to lowest)
 _TIER1 = {MediaPlayerState.PLAYING, MediaPlayerState.BUFFERING}
@@ -47,6 +47,7 @@ class CombinedMediaPlayer(MediaPlayerEntity):
         self._entry = entry
         self._attr_unique_id = entry.unique_id
         self._sources: list[str] = self._sources_from_entry(entry)
+        self._audio_sources: list[str] = self._audio_sources_from_entry(entry)
         self._attr_name: str = (
             entry.options.get(CONF_NAME)
             or entry.data.get(CONF_NAME, "Combined Media Player")
@@ -69,16 +70,26 @@ class CombinedMediaPlayer(MediaPlayerEntity):
             or entry.data.get(CONF_SOURCES, [])
         )
 
+    @staticmethod
+    def _audio_sources_from_entry(entry: ConfigEntry) -> list[str]:
+        return list(
+            entry.options.get(CONF_AUDIO_SOURCES)
+            or entry.data.get(CONF_AUDIO_SOURCES, [])
+        )
+
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         # Refresh sources in case options were saved before this entity loaded
         self._sources = self._sources_from_entry(self._entry)
-        if self._sources:
+        self._audio_sources = self._audio_sources_from_entry(self._entry)
+        # Track all unique entity IDs (audio sources may not be in main sources list)
+        all_tracked = list(dict.fromkeys(self._sources + self._audio_sources))
+        if all_tracked:
             self._unsub = async_track_state_change_event(
                 self.hass,
-                self._sources,
+                all_tracked,
                 self._handle_state_change,
             )
 
@@ -112,6 +123,36 @@ class CombinedMediaPlayer(MediaPlayerEntity):
                     return sid
         return None
 
+    def _active_audio_entity_id(self) -> str | None:
+        """Return the highest-priority active audio source entity_id, or None.
+
+        Audio sources are a subset of sources designated to receive control
+        commands (volume, play/pause, skip) when they are active. This lets a
+        display-only source (e.g. a gaming PC) win for cover/state while audio
+        controls still reach the real playback device (e.g. HomePods).
+        """
+        if not self._audio_sources:
+            return None
+        for tier in (_TIER1, _TIER2, _TIER3):
+            for sid in self._audio_sources:
+                s = self.hass.states.get(sid)
+                if s and _safe_state(s.state) and MediaPlayerState(s.state) in tier:
+                    return sid
+        return None
+
+    def _control_state(self) -> State | None:
+        """Return the State used for control-related attributes.
+
+        Prefers the active audio source (if configured and active) so that
+        volume level, supported features, shuffle, and repeat reflect the
+        device that will actually receive commands. Falls back to the normal
+        display-priority source when no audio source is active.
+        """
+        audio_id = self._active_audio_entity_id()
+        if audio_id:
+            return self.hass.states.get(audio_id)
+        return self._active_state()
+
     # ── Availability & state ───────────────────────────────────────────────────
 
     @property
@@ -137,12 +178,12 @@ class CombinedMediaPlayer(MediaPlayerEntity):
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
-        active = self._active_state()
-        if active is None:
+        ctrl = self._control_state()
+        if ctrl is None:
             return MediaPlayerEntityFeature(0)
         try:
             return MediaPlayerEntityFeature(
-                int(active.attributes.get("supported_features", 0))
+                int(ctrl.attributes.get("supported_features", 0))
             )
         except (TypeError, ValueError):
             return MediaPlayerEntityFeature(0)
@@ -152,6 +193,11 @@ class CombinedMediaPlayer(MediaPlayerEntity):
     def _from_active(self, key: str, default: Any = None) -> Any:
         active = self._active_state()
         return active.attributes.get(key, default) if active else default
+
+    def _from_control(self, key: str, default: Any = None) -> Any:
+        """Read an attribute from the control target (audio source preferred)."""
+        ctrl = self._control_state()
+        return ctrl.attributes.get(key, default) if ctrl else default
 
     @property
     def media_title(self) -> str | None:
@@ -199,27 +245,27 @@ class CombinedMediaPlayer(MediaPlayerEntity):
 
     @property
     def volume_level(self) -> float | None:
-        return self._from_active("volume_level")
+        return self._from_control("volume_level")
 
     @property
     def is_volume_muted(self) -> bool | None:
-        return self._from_active("is_volume_muted")
+        return self._from_control("is_volume_muted")
 
     @property
     def source(self) -> str | None:
-        return self._from_active("source")
+        return self._from_control("source")
 
     @property
     def source_list(self) -> list[str] | None:
-        return self._from_active("source_list")
+        return self._from_control("source_list")
 
     @property
     def shuffle(self) -> bool | None:
-        return self._from_active("shuffle")
+        return self._from_control("shuffle")
 
     @property
     def repeat(self) -> str | None:
-        return self._from_active("repeat")
+        return self._from_control("repeat")
 
     # ── Cover art ─────────────────────────────────────────────────────────────
 
@@ -244,15 +290,21 @@ class CombinedMediaPlayer(MediaPlayerEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         active_id = self._active_entity_id()
-        return {
+        audio_id = self._active_audio_entity_id()
+        attrs: dict[str, Any] = {
             "active_source": active_id,
             "sources": self._sources,
         }
+        if self._audio_sources:
+            attrs["active_audio_source"] = audio_id
+            attrs["audio_sources"] = self._audio_sources
+        return attrs
 
     # ── Controls (forwarded to active source) ─────────────────────────────────
 
     async def _call_active(self, service: str, **kwargs: Any) -> None:
-        target = self._active_entity_id()
+        # Prefer the active audio source for commands; fall back to display source.
+        target = self._active_audio_entity_id() or self._active_entity_id()
         if target is None:
             return
         await self.hass.services.async_call(

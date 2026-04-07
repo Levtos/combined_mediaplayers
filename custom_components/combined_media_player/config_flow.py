@@ -8,7 +8,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
-from .const import CONF_NAME, CONF_SOURCES, DOMAIN
+from .const import CONF_AUDIO_SOURCES, CONF_NAME, CONF_SOURCES, DOMAIN
 
 # ── Slot helpers (UI-only, not persisted) ─────────────────────────────────────
 
@@ -42,7 +42,7 @@ def _slots_to_providers(form_data: dict) -> list[str]:
 
 class CombinedMediaPlayerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 1
+    MINOR_VERSION = 2
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
@@ -50,6 +50,7 @@ class CombinedMediaPlayerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             name = user_input.get(CONF_NAME, "").strip()
             sources = user_input.get(CONF_SOURCES) or []
+            audio_sources = user_input.get(CONF_AUDIO_SOURCES) or []
 
             if not name:
                 errors[CONF_NAME] = "name_required"
@@ -66,6 +67,7 @@ class CombinedMediaPlayerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data={
                         CONF_NAME: name,
                         CONF_SOURCES: list(sources),
+                        CONF_AUDIO_SOURCES: list(audio_sources),
                     },
                 )
 
@@ -77,6 +79,12 @@ class CombinedMediaPlayerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
                     ),
                     vol.Required(CONF_SOURCES): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain="media_player",
+                            multiple=True,
+                        )
+                    ),
+                    vol.Optional(CONF_AUDIO_SOURCES): selector.EntitySelector(
                         selector.EntitySelectorConfig(
                             domain="media_player",
                             multiple=True,
@@ -111,13 +119,18 @@ class CombinedMediaPlayerOptionsFlow(config_entries.OptionsFlow):
                 if not sources:
                     errors["base"] = "sources_required"
                 else:
+                    audio_sources = user_input.get(CONF_AUDIO_SOURCES) or []
                     if new_name != self.config_entry.title:
                         self.hass.config_entries.async_update_entry(
                             self.config_entry, title=new_name
                         )
                     return self.async_create_entry(
                         title="",
-                        data={CONF_NAME: new_name, CONF_SOURCES: sources},
+                        data={
+                            CONF_NAME: new_name,
+                            CONF_SOURCES: sources,
+                            CONF_AUDIO_SOURCES: list(audio_sources),
+                        },
                     )
 
         return self.async_show_form(
@@ -138,6 +151,11 @@ class CombinedMediaPlayerOptionsFlow(config_entries.OptionsFlow):
         current_sources = list(
             self.config_entry.options.get(CONF_SOURCES)
             or self.config_entry.data.get(CONF_SOURCES, [])
+        )
+        current_audio_sources = list(
+            (prefill.get(CONF_AUDIO_SOURCES) if prefill is not None else None)
+            or self.config_entry.options.get(CONF_AUDIO_SOURCES)
+            or self.config_entry.data.get(CONF_AUDIO_SOURCES, [])
         )
 
         # Slot values: restore from prefill (after validation error) or from saved sources
@@ -167,6 +185,13 @@ class CombinedMediaPlayerOptionsFlow(config_entries.OptionsFlow):
             )
         )
 
+        audio_source_selector = selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                domain="media_player",
+                multiple=True,
+            )
+        )
+
         return vol.Schema(
             {
                 vol.Required(CONF_NAME, default=current_name): selector.TextSelector(
@@ -176,5 +201,8 @@ class CombinedMediaPlayerOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(key, default=slots[key]): slot_selector
                     for key in _SLOT_KEYS
                 },
+                vol.Optional(
+                    CONF_AUDIO_SOURCES, default=current_audio_sources
+                ): audio_source_selector,
             }
         )
