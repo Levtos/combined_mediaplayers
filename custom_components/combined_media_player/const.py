@@ -8,3 +8,4 @@ PLATFORMS: list[Platform] = [Platform.MEDIA_PLAYER, Platform.IMAGE]
 
 CONF_NAME = "name"
 CONF_SOURCES = "sources"
+CONF_AUDIO_SOURCES = "audio_sources"
