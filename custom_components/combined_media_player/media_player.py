@@ -55,6 +55,7 @@ class CombinedMediaPlayer(MediaPlayerEntity):
             or entry.data.get(CONF_NAME, "Combined Media Player")
         )
         self._unsub: Any = None
+        self._attr_entity_picture: str | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -86,6 +87,8 @@ class CombinedMediaPlayer(MediaPlayerEntity):
         # Refresh sources in case options were saved before this entity loaded
         self._sources = self._sources_from_entry(self._entry)
         self._audio_sources = self._audio_sources_from_entry(self._entry)
+        # Seed entity_picture from the already-known active source state
+        self._attr_entity_picture = self._from_active("entity_picture")
         # Track all unique entity IDs (audio sources may not be in main sources list)
         all_tracked = list(dict.fromkeys(self._sources + self._audio_sources))
         if all_tracked:
@@ -103,6 +106,7 @@ class CombinedMediaPlayer(MediaPlayerEntity):
 
     @callback
     def _handle_state_change(self, event) -> None:
+        self._attr_entity_picture = self._from_active("entity_picture")
         self.async_write_ha_state()
 
     # ── Active source resolution ───────────────────────────────────────────────
