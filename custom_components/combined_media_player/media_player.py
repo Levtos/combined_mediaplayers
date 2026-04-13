@@ -3,10 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.media_player import (
+    BrowseMedia,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
 )
+from homeassistant.components.media_player.errors import BrowseError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -181,11 +183,24 @@ class CombinedMediaPlayer(MediaPlayerEntity):
         if ctrl is None:
             return MediaPlayerEntityFeature(0)
         try:
-            return MediaPlayerEntityFeature(
+            features = MediaPlayerEntityFeature(
                 int(ctrl.attributes.get("supported_features", 0))
             )
         except (TypeError, ValueError):
             return MediaPlayerEntityFeature(0)
+        # BROWSE_MEDIA belongs to the display source (e.g. Music Assistant),
+        # not the audio/control target (e.g. HomePods).  Always mirror this flag
+        # from the active display source so browsing works even when audio
+        # sources are configured as a separate control target.
+        active = self._active_state()
+        if active is not None:
+            try:
+                active_features = int(active.attributes.get("supported_features", 0))
+                if active_features & int(MediaPlayerEntityFeature.BROWSE_MEDIA):
+                    features |= MediaPlayerEntityFeature.BROWSE_MEDIA
+            except (TypeError, ValueError):
+                pass
+        return features
 
     # ── Media attributes (proxied from active source) ──────────────────────────
 
@@ -303,6 +318,23 @@ class CombinedMediaPlayer(MediaPlayerEntity):
             return await entity.async_get_media_image()
         except Exception:
             return None, None
+
+    async def async_browse_media(
+        self,
+        media_content_type: str | None = None,
+        media_content_id: str | None = None,
+    ) -> BrowseMedia:
+        """Delegate media browsing to the currently active source entity."""
+        active_id = self._active_entity_id()
+        if not active_id:
+            raise BrowseError("No active source available for media browsing")
+        component = self.hass.data.get("entity_components", {}).get("media_player")
+        if component is None:
+            raise BrowseError("Media player component not found")
+        entity = component.get_entity(active_id)
+        if entity is None:
+            raise BrowseError(f"Source entity {active_id!r} not found")
+        return await entity.async_browse_media(media_content_type, media_content_id)
 
     @property
     def media_image_remotely_accessible(self) -> bool:
