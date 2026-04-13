@@ -311,8 +311,8 @@ class CombinedMediaPlayer(MediaPlayerEntity):
         active_id = self._active_entity_id()
         if not active_id:
             return None, None
-        component = self.hass.data.get("entity_components", {}).get("media_player")
-        if not component:
+        component = self.hass.data.get("media_player")
+        if component is None or not hasattr(component, "get_entity"):
             return None, None
         entity = component.get_entity(active_id)
         if entity is None:
@@ -366,9 +366,9 @@ class CombinedMediaPlayer(MediaPlayerEntity):
         browse_id = self._browse_entity_id()
         if not browse_id:
             raise BrowseError("No source with BROWSE_MEDIA support found")
-        component = self.hass.data.get("entity_components", {}).get("media_player")
-        if component is None:
-            raise BrowseError("Media player component not found")
+        component = self.hass.data.get("media_player")
+        if component is None or not hasattr(component, "get_entity"):
+            raise BrowseError("Media player component not available")
         entity = component.get_entity(browse_id)
         if entity is None:
             raise BrowseError(f"Source entity {browse_id!r} not found")
