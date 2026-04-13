@@ -188,18 +188,21 @@ class CombinedMediaPlayer(MediaPlayerEntity):
             )
         except (TypeError, ValueError):
             return MediaPlayerEntityFeature(0)
-        # BROWSE_MEDIA belongs to the display source (e.g. Music Assistant),
-        # not the audio/control target (e.g. HomePods).  Always mirror this flag
-        # from the active display source so browsing works even when audio
-        # sources are configured as a separate control target.
-        active = self._active_state()
-        if active is not None:
+        # BROWSE_MEDIA is a content-library capability, not a hardware capability.
+        # Expose it whenever *any* configured source supports it so the browser
+        # remains accessible regardless of which source is currently active or
+        # whether the audio/control target (e.g. HomePods) supports browsing.
+        browse_bit = int(MediaPlayerEntityFeature.BROWSE_MEDIA)
+        for sid in self._sources + self._audio_sources:
+            s = self.hass.states.get(sid)
+            if s is None:
+                continue
             try:
-                active_features = int(active.attributes.get("supported_features", 0))
-                if active_features & int(MediaPlayerEntityFeature.BROWSE_MEDIA):
+                if int(s.attributes.get("supported_features", 0)) & browse_bit:
                     features |= MediaPlayerEntityFeature.BROWSE_MEDIA
+                    break
             except (TypeError, ValueError):
-                pass
+                continue
         return features
 
     # ── Media attributes (proxied from active source) ──────────────────────────
@@ -319,21 +322,56 @@ class CombinedMediaPlayer(MediaPlayerEntity):
         except Exception:
             return None, None
 
+    def _browse_entity_id(self) -> str | None:
+        """Return the entity_id of the best source to delegate media browsing to.
+
+        Selection order:
+        1. The currently active display source, if it supports BROWSE_MEDIA.
+        2. The currently active audio source, if it supports BROWSE_MEDIA.
+        3. Any source (display or audio, regardless of playback state) that
+           supports BROWSE_MEDIA – first match wins.
+        """
+        browse_bit = int(MediaPlayerEntityFeature.BROWSE_MEDIA)
+
+        def _supports_browse(entity_id: str) -> bool:
+            s = self.hass.states.get(entity_id)
+            if s is None:
+                return False
+            try:
+                return bool(int(s.attributes.get("supported_features", 0)) & browse_bit)
+            except (TypeError, ValueError):
+                return False
+
+        # Prefer whichever source is currently active and can browse
+        for candidate in (self._active_entity_id(), self._active_audio_entity_id()):
+            if candidate and _supports_browse(candidate):
+                return candidate
+
+        # Fall back to any configured source that supports browsing
+        seen: set[str] = set()
+        for sid in self._sources + self._audio_sources:
+            if sid not in seen:
+                seen.add(sid)
+                if _supports_browse(sid):
+                    return sid
+
+        return None
+
     async def async_browse_media(
         self,
         media_content_type: str | None = None,
         media_content_id: str | None = None,
     ) -> BrowseMedia:
-        """Delegate media browsing to the currently active source entity."""
-        active_id = self._active_entity_id()
-        if not active_id:
-            raise BrowseError("No active source available for media browsing")
+        """Delegate media browsing to the best available source entity."""
+        browse_id = self._browse_entity_id()
+        if not browse_id:
+            raise BrowseError("No source with BROWSE_MEDIA support found")
         component = self.hass.data.get("entity_components", {}).get("media_player")
         if component is None:
             raise BrowseError("Media player component not found")
-        entity = component.get_entity(active_id)
+        entity = component.get_entity(browse_id)
         if entity is None:
-            raise BrowseError(f"Source entity {active_id!r} not found")
+            raise BrowseError(f"Source entity {browse_id!r} not found")
         return await entity.async_browse_media(media_content_type, media_content_id)
 
     @property
