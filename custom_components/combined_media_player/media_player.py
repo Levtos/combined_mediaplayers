@@ -12,6 +12,7 @@ from homeassistant.components.media_player.errors import BrowseError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import CONF_AUDIO_SOURCES, CONF_NAME, CONF_SOURCES, DOMAIN
@@ -307,20 +308,28 @@ class CombinedMediaPlayer(MediaPlayerEntity):
         return None
 
     async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
-        """Delegate image fetching to the active source entity's own handler."""
-        active_id = self._active_entity_id()
-        if not active_id:
-            return None, None
-        component = self.hass.data.get("media_player")
-        if component is None or not hasattr(component, "get_entity"):
-            return None, None
-        entity = component.get_entity(active_id)
-        if entity is None:
-            return None, None
-        try:
-            return await entity.async_get_media_image()
-        except Exception:
-            return None, None
+        """Fetch cover art from the paired CombinedCoverImage entity.
+
+        image.py handles caching, entity_picture fallback, and last-known-good
+        persistence.  Delegating here avoids duplicating that logic and ensures
+        the media-player card and the image entity always show the same art.
+        """
+        er = async_get_entity_registry(self.hass)
+        image_entity_id = er.async_get_entity_id(
+            "image", DOMAIN, f"{self._entry.unique_id}_cover"
+        )
+        if image_entity_id:
+            image_component = self.hass.data.get("image")
+            if image_component is not None and hasattr(image_component, "get_entity"):
+                entity = image_component.get_entity(image_entity_id)
+                if entity is not None:
+                    try:
+                        data = await entity.async_image()
+                        if data:
+                            return data, getattr(entity, "content_type", None) or "image/jpeg"
+                    except Exception:
+                        pass
+        return None, None
 
     def _browse_entity_id(self) -> str | None:
         """Return the entity_id of the best source to delegate media browsing to.
